@@ -2,7 +2,7 @@ import { cp, link, mkdir, mkdtemp, open, readdir, rename, rm, stat, realpath, un
 import { existsSync, unlinkSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { assert, compile, readDb, readMap, mapFile } from './compile.mjs';
 import { readRxdataRaw } from 'rpgmaker-xp-mcp/dist/utils/rxdata.js';
 
@@ -11,12 +11,32 @@ const settings = JSON.parse(await readFile(join(here, 'settings.json'), 'utf8').
   if (error.code !== 'ENOENT') throw error;
   return '{}';
 }));
-export const install = resolve(process.env.RPGXP_HOME ?? settings.rpgxp ?? 'C:/Program Files (x86)/Steam/steamapps/common/RPGXP');
+function findInstalledEditor() {
+  const adjacent = resolve(here, '..');
+  if (existsSync(join(adjacent, 'RPGXP.exe'))) return adjacent;
+  if (process.platform === 'win32') {
+    const powershell = join(process.env.SystemRoot ?? 'C:/Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+    const lookup = "[Console]::OutputEncoding=[Text.Encoding]::UTF8; " +
+      "(Get-ItemProperty -LiteralPath 'HKLM:\\SOFTWARE\\WOW6432Node\\Enterbrain\\RPGXP' -Name ApplicationPath -ErrorAction SilentlyContinue).ApplicationPath";
+    const { stdout } = spawnSync(powershell, ['-NoProfile', '-NonInteractive', '-Command', lookup],
+      { encoding: 'utf8', windowsHide: true, timeout: 3000 });
+    const path = stdout?.trim();
+    if (path && existsSync(join(path, 'RPGXP.exe'))) return path;
+  }
+  return 'C:/Program Files (x86)/Steam/steamapps/common/RPGXP';
+}
+export const install = resolve(process.env.RPGXP_HOME ?? settings.rpgxp ?? findInstalledEditor());
 export const workspace = resolve(process.env.RPGXP_WORKSPACE ?? settings.workspace ?? join(here,'..'));
 export const projects = join(workspace, 'projects');
 export const rtp = join(install, 'rtp');
 export const authoringGuide = join(here, '制作接口.md');
 export const sample = join(workspace, 'lighthouse.json');
+
+function verifyInstall() {
+  for (const name of ['RPGXP.exe', 'System/Game.exe', 'System/Data/System.rxdata', 'RGSS104E.dll', 'rtp/Graphics']) {
+    assert(existsSync(join(install, name)), `找不到完整的 RPG Maker XP 安装。已检查 ${install}。请从 Steam 启动一次，或在 studio/settings.json 中填写 rpgxp 路径。`);
+  }
+}
 
 export async function stagingFolder(root, prefix) {
   await mkdir(root, { recursive: true });
@@ -82,6 +102,7 @@ export async function listProjects() {
 
 async function newProject(id, config, builder) {
   projectId(id);
+  verifyInstall();
   const title = config.windowTitle ?? id;
   assert(typeof title === 'string' && /^[ -~]{1,80}$/.test(title) && !title.includes('"'), 'windowTitle must be a single printable ASCII line without quotes');
   await mkdir(projects, { recursive: true });
@@ -228,6 +249,7 @@ export async function packageProject(id, revision = 'release') {
 }
 
 export async function launchProject(id, editor = false) {
+  if (editor) verifyInstall();
   const dir = await getProject(id);
   const child = runProcess(editor ? join(install, 'RPGXP.exe') : join(dir, 'Game.exe'),
     editor ? [join(dir, 'Game.rxproj')] : [], { cwd: dir, detached: true, stdio: 'ignore', windowsHide: false });

@@ -10,10 +10,9 @@ import { createRequire } from 'node:module';
 import { assert, readJson } from './compile.mjs';
 import {
   authoringGuide, sample, getProject, listProjects, initProject, buildProject, checkProject,
-  packageProject, launchProject, projectId, withProjectLock, rtp, workspace,
+  packageProject, launchProject, withProjectLock, rtp, workspace,
 } from './project.mjs';
 import { playtest } from './playtest.mjs';
-import { exportWeb } from './web-export.mjs';
 
 process.env.RPGMAKER_RTP_PATH = rtp;
 const nativeEntry = createRequire(import.meta.url).resolve('rpgmaker-xp-mcp');
@@ -36,8 +35,6 @@ const custom = [
     { ...projectField, source: text('Absolute path to the local asset'), category: text('For example Graphics/Characters, Graphics/Titles, Audio/BGM') }, ['project', 'source', 'category']),
   definition('studio_package', 'Validate and create a standalone Windows ZIP with local runtime assets. Release ZIPs are stored in the workspace dist directory.',
     { ...projectField, revision: text('Optional ASCII revision suffix, default release') }, ['project']),
-  definition('studio_export_web', 'Compile a compatible JSON specification to an offline browser game in dist. Use a new output ID. This export supports the demo terrain skin and native-like map events.',
-    { output: text('New output ID'), specFile: text('Absolute path to a UTF-8 JSON specification') }, ['output','specFile']),
   definition('studio_launch', 'Open the game or original RPG Maker XP editor window.',
     { ...projectField, editor: { type: 'boolean', description: 'Open Game.rxproj when true' } }, ['project']),
 ];
@@ -90,9 +87,6 @@ async function execute(name, args = {}) {
       return importAsset(args);
     case 'studio_package':
       return packageProject(args.project, args.revision);
-    case 'studio_export_web':
-      assert(typeof args.specFile === 'string' && isAbsolute(args.specFile), 'specFile must be an absolute path');
-      return exportWeb(await readJson(args.specFile),join(workspace,'dist',projectId(args.output)));
     case 'studio_launch':
       return launchProject(args.project, args.editor === true);
     default: {

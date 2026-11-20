@@ -2,5 +2,6 @@
 /dist/
 /reports/
 /studio/settings.json
+/studio/runtime/
 node_modules/
 *.log
