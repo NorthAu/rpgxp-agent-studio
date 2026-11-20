@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "rpgmaker-xp-mcp": "1.1.3"
+  }
+}

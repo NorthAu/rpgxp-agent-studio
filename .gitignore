@@ -1,0 +1,6 @@
+/projects/
+/dist/
+/reports/
+/studio/settings.json
+node_modules/
+*.log

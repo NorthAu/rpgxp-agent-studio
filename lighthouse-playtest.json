@@ -1,0 +1,148 @@
+{
+  "project": "lighthouse-v2",
+  "route": [
+    {
+      "at": [
+        1,
+        9,
+        11
+      ]
+    },
+    {
+      "move": [
+        8,
+        2
+      ]
+    },
+    {
+      "interact": true
+    },
+    {
+      "choose": 0
+    },
+    {
+      "text": "备用的"
+    },
+    {
+      "switch": [
+        1,
+        false
+      ]
+    },
+    {
+      "interact": true
+    },
+    {
+      "choose": 1
+    },
+    {
+      "text": "沿石径往东"
+    },
+    {
+      "switch": [
+        1,
+        true
+      ]
+    },
+    {
+      "move": [
+        6,
+        6
+      ]
+    },
+    {
+      "interact": true
+    },
+    {
+      "at": [
+        2,
+        3,
+        9
+      ]
+    },
+    {
+      "move": [
+        6,
+        5
+      ]
+    },
+    {
+      "interact": true
+    },
+    {
+      "text": "愿灯照见归人"
+    },
+    {
+      "switch": [
+        2,
+        true
+      ]
+    },
+    {
+      "move": [
+        4,
+        5
+      ]
+    },
+    {
+      "interact": true
+    },
+    {
+      "at": [
+        1,
+        15,
+        9
+      ]
+    },
+    {
+      "move": [
+        4,
+        5
+      ]
+    },
+    {
+      "move": [
+        8,
+        4
+      ]
+    },
+    {
+      "interact": true
+    },
+    {
+      "text": "第一声船笛"
+    },
+    {
+      "switch": [
+        3,
+        true
+      ]
+    },
+    {
+      "gold": 50
+    },
+    {
+      "at": [
+        1,
+        10,
+        5
+      ]
+    },
+    {
+      "interact": true
+    },
+    {
+      "text": "返航的水道"
+    },
+    {
+      "gold": 50
+    },
+    {
+      "at": [
+        1,
+        10,
+        5
+      ]
+    }
+  ]
+}
