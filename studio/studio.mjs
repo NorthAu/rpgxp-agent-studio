@@ -10,7 +10,7 @@ import { createRequire } from 'node:module';
 import { assert, readJson } from './compile.mjs';
 import {
   authoringGuide, sample, getProject, listProjects, initProject, buildProject, checkProject,
-  packageProject, launchProject, withProjectLock, rtp, workspace,
+  packageProject, launchProject, prepareOfflineRuntime, withProjectLock, rtp, workspace,
 } from './project.mjs';
 import { playtest } from './playtest.mjs';
 
@@ -35,8 +35,10 @@ const custom = [
     { ...projectField, source: text('Absolute path to the local asset'), category: text('For example Graphics/Characters, Graphics/Titles, Audio/BGM') }, ['project', 'source', 'category']),
   definition('studio_package', 'Validate and create a standalone Windows ZIP with local runtime assets. Release ZIPs are stored in the workspace dist directory.',
     { ...projectField, revision: text('Optional ASCII revision suffix, default release') }, ['project']),
-  definition('studio_launch', 'Open the game or original RPG Maker XP editor window.',
-    { ...projectField, editor: { type: 'boolean', description: 'Open Game.rxproj when true' } }, ['project']),
+  definition('studio_cache_runtime', 'Prepare a local RPG Maker XP runtime from files already installed on this PC. The next Studio session uses the snapshot by default.',
+    { source: text('Optional absolute path to the original XP installation'), rtp: text('Optional absolute path to the RTP directory') }),
+  definition('studio_launch', 'Open the game or a configured non-Steam RPG Maker XP editor.',
+    { ...projectField, editor: { type: 'boolean', description: 'Open Game.rxproj with the non-Steam editor when true' } }, ['project']),
 ];
 
 async function upstream(project, operate) {
@@ -87,6 +89,10 @@ async function execute(name, args = {}) {
       return importAsset(args);
     case 'studio_package':
       return packageProject(args.project, args.revision);
+    case 'studio_cache_runtime':
+      assert(!args.source || isAbsolute(args.source), 'source must be an absolute path');
+      assert(!args.rtp || isAbsolute(args.rtp), 'rtp must be an absolute path');
+      return prepareOfflineRuntime(args.source, args.rtp);
     case 'studio_launch':
       return launchProject(args.project, args.editor === true);
     default: {

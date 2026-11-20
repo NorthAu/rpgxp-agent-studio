@@ -6,17 +6,20 @@
 
 ## 开始制作
 
-1. 在 Windows 上安装 Steam 版 RPG Maker XP，并从 Steam 启动一次。
-2. 解压便携版，双击 `Start-RPGXP-Studio.cmd`。Node.js 和制作器所需依赖随包提供。
-3. 选择「构建、通关并打包内置示例」体验完整流程。也可以选择自己的 JSON 规格。生成的 `projects/<项目>/Game.rxproj` 可在原版编辑器中打开，游戏包在 `dist`。
+1. 解压便携版，双击 `Start-RPGXP-Studio.cmd`。Node.js 和制作器所需依赖随包提供。
+2. 第一次使用时选「准备本机离线运行库」，输入本机已有的 RPG Maker XP 安装目录。素材安装在其他位置时，再填写 RTP 目录。这个过程只读取已有文件，完成后的本地运行库放在 `.rpgxp-runtime`。
+3. 重新打开菜单，选择「构建、通关并打包内置示例」体验完整流程。也可以选择自己的 JSON 规格。工程在 `projects/<项目>`，游戏包在 `dist`。
 
-便携版读取本机已安装的 XP 模板、素材和运行时。制作过程可离线完成。若安装目录未被识别，可把 `studio/settings.example.json` 复制为 `studio/settings.json`，然后填写 `rpgxp` 路径。
+本地运行库包含 XP 模板、素材和原版 RGSS1 游戏运行时。生成、试玩与打包可离线完成，无需启动或登录 Steam。公开便携包提供工具和 Node.js，初次准备运行库时需要来自本机授权安装的 XP 文件。
+
+需要在图形界面手动修改 `.rxproj` 时，可把 `studio/settings.example.json` 复制为 `studio/settings.json`，在 `editor` 填入官方非 Steam 版 `RPGXP.exe` 的完整路径。按该版本的官方方式激活。[RPG Maker XP 官方下载与购买页](https://www.rpgmakerweb.com/products/rpg-maker-xp)
 
 `lighthouse.json` 和 `lighthouse-playtest.json` 是《最后一座灯塔》的原生工程规格和测试路线。示例包含两张地图、对话分支、传送、任务和结局状态。
 
 ## 命令行与 Agent
 
 ```cmd
+Start-RPGXP-Studio.cmd cache-runtime "D:\path\to\RPGXP"
 Start-RPGXP-Studio.cmd demo lighthouse
 Start-RPGXP-Studio.cmd call studio_guide
 Start-RPGXP-Studio.cmd tools

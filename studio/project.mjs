@@ -1,5 +1,5 @@
 import { cp, link, mkdir, mkdtemp, open, readdir, rename, rm, stat, realpath, unlink, writeFile, readFile, copyFile } from 'node:fs/promises';
-import { existsSync, unlinkSync } from 'node:fs';
+import { existsSync, readdirSync, unlinkSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, spawnSync } from 'node:child_process';
@@ -7,34 +7,85 @@ import { assert, compile, readDb, readMap, mapFile } from './compile.mjs';
 import { readRxdataRaw } from 'rpgmaker-xp-mcp/dist/utils/rxdata.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const settings = JSON.parse(await readFile(join(here, 'settings.json'), 'utf8').catch(error => {
+const settings = JSON.parse((await readFile(join(here, 'settings.json'), 'utf8').catch(error => {
   if (error.code !== 'ENOENT') throw error;
   return '{}';
-}));
-function findInstalledEditor() {
-  const adjacent = resolve(here, '..');
-  if (existsSync(join(adjacent, 'RPGXP.exe'))) return adjacent;
-  if (process.platform === 'win32') {
-    const powershell = join(process.env.SystemRoot ?? 'C:/Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-    const lookup = "[Console]::OutputEncoding=[Text.Encoding]::UTF8; " +
-      "(Get-ItemProperty -LiteralPath 'HKLM:\\SOFTWARE\\WOW6432Node\\Enterbrain\\RPGXP' -Name ApplicationPath -ErrorAction SilentlyContinue).ApplicationPath";
-    const { stdout } = spawnSync(powershell, ['-NoProfile', '-NonInteractive', '-Command', lookup],
-      { encoding: 'utf8', windowsHide: true, timeout: 3000 });
-    const path = stdout?.trim();
-    if (path && existsSync(join(path, 'RPGXP.exe'))) return path;
-  }
-  return 'C:/Program Files (x86)/Steam/steamapps/common/RPGXP';
+})).replace(/^\uFEFF/, ''));
+
+function readRegistry(key, name) {
+  if (process.platform !== 'win32') return undefined;
+  const powershell = join(process.env.SystemRoot ?? 'C:/Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  const lookup = "[Console]::OutputEncoding=[Text.Encoding]::UTF8; " +
+    `(Get-ItemProperty -LiteralPath '${key}' -Name ${name} -ErrorAction SilentlyContinue).${name}`;
+  const { stdout } = spawnSync(powershell, ['-NoProfile', '-NonInteractive', '-Command', lookup],
+    { encoding: 'utf8', windowsHide: true, timeout: 3000 });
+  return stdout?.trim() || undefined;
 }
-export const install = resolve(process.env.RPGXP_HOME ?? settings.rpgxp ?? findInstalledEditor());
+
+function discoverEditor() {
+  return readRegistry('HKLM:\\SOFTWARE\\WOW6432Node\\Enterbrain\\RPGXP', 'ApplicationPath');
+}
+
+function findRuntimeSource() {
+  const adjacent = resolve(here, '..');
+  return existsSync(join(adjacent, 'System', 'Game.exe')) ? adjacent : discoverEditor();
+}
+
 export const workspace = resolve(process.env.RPGXP_WORKSPACE ?? settings.workspace ?? join(here,'..'));
+export const offlineRuntime = join(workspace, '.rpgxp-runtime');
+export const install = resolve(process.env.RPGXP_HOME || (existsSync(offlineRuntime) && offlineRuntime) ||
+  settings.rpgxp || findRuntimeSource() || offlineRuntime);
 export const projects = join(workspace, 'projects');
-export const rtp = join(install, 'rtp');
 export const authoringGuide = join(here, '制作接口.md');
 export const sample = join(workspace, 'lighthouse.json');
 
-function verifyInstall() {
-  for (const name of ['RPGXP.exe', 'System/Game.exe', 'System/Data/System.rxdata', 'RGSS104E.dll', 'rtp/Graphics']) {
-    assert(existsSync(join(install, name)), `找不到完整的 RPG Maker XP 安装。已检查 ${install}。请从 Steam 启动一次，或在 studio/settings.json 中填写 rpgxp 路径。`);
+const libraryPattern = /^RGSS10[0-5][A-Z]\.dll$/i;
+const hasAssets = root => root && ['Graphics', 'Audio'].every(kind => existsSync(join(root, kind)));
+
+function locateRtp(root, preferred) {
+  if (preferred) return resolve(preferred);
+  const local = join(root, 'rtp');
+  if (hasAssets(local)) return local;
+  if (hasAssets(root)) return root;
+  // The retail installer can register RTP in a separate directory.
+  const standard = existsSync(join(root, 'System', 'Game.exe')) &&
+    readRegistry('HKLM:\\SOFTWARE\\WOW6432Node\\Enterbrain\\RGSS\\RTP', 'Standard');
+  return hasAssets(standard) ? standard : local;
+}
+
+export const rtp = locateRtp(install, install === offlineRuntime ? undefined : process.env.RPGXP_RTP || settings.rtp);
+
+function verifyRuntime(root, assets) {
+  for (const file of ['System/Game.exe', 'System/Data/System.rxdata', 'System/Data/Scripts.rxdata']) {
+    assert(existsSync(join(root, file)), `找不到 RPG Maker XP 模板 ${file}，已检查 ${root}。可用 cache-runtime 导入本机已有的 XP 安装。`);
+  }
+  const libraries = readdirSync(root).filter(name => libraryPattern.test(name)).sort().reverse();
+  const library = libraries.find(name => name.toUpperCase() === 'RGSS104E.DLL') ?? libraries[0];
+  assert(library, `在 ${root} 中找不到 RGSS1 DLL。`);
+  assert(hasAssets(assets), `找不到 XP 的 Graphics 和 Audio 素材。已检查 ${assets}。可在 cache-runtime 命令传入 RTP 目录。`);
+  return library;
+}
+
+export async function prepareOfflineRuntime(source = install, assets) {
+  const input = resolve(source);
+  if (existsSync(offlineRuntime)) {
+    const library = verifyRuntime(offlineRuntime, join(offlineRuntime, 'rtp'));
+    return { runtime: offlineRuntime, library, reused: true };
+  }
+  const assetsRoot = locateRtp(input, assets || process.env.RPGXP_RTP || settings.rtp);
+  const library = verifyRuntime(input, assetsRoot);
+  const stage = await stagingFolder(workspace, '.runtime-copy-');
+  try {
+    await cp(join(input, 'System', 'Data'), join(stage, 'System', 'Data'), { recursive: true });
+    await copyFile(join(input, 'System', 'Game.exe'), join(stage, 'System', 'Game.exe'));
+    await copyFile(join(input, library), join(stage, library));
+    for (const kind of ['Graphics', 'Audio']) {
+      await cp(join(assetsRoot, kind), join(stage, 'rtp', kind), { recursive: true });
+    }
+    await rename(stage, offlineRuntime);
+    return { runtime: offlineRuntime, library, reused: false };
+  } finally {
+    await rm(stage, { recursive: true, force: true });
   }
 }
 
@@ -102,7 +153,7 @@ export async function listProjects() {
 
 async function newProject(id, config, builder) {
   projectId(id);
-  verifyInstall();
+  const library = verifyRuntime(install, rtp);
   const title = config.windowTitle ?? id;
   assert(typeof title === 'string' && /^[ -~]{1,80}$/.test(title) && !title.includes('"'), 'windowTitle must be a single printable ASCII line without quotes');
   await mkdir(projects, { recursive: true });
@@ -110,14 +161,13 @@ async function newProject(id, config, builder) {
   assert(!existsSync(destination), `Project already exists: ${destination}. Build a new ID to keep both revisions.`);
   const stage = await stagingFolder(projects, '.build-');
   try {
-    const library = 'RGSS104E.dll';
     await cp(join(install, 'System', 'Data'), join(stage, 'Data'), { recursive: true });
     await copyFile(join(install, 'System', 'Game.exe'), join(stage, 'Game.exe'));
     await copyFile(join(install, library), join(stage, library));
     for (const kind of ['Graphics', 'Audio']) {
       await cp(join(rtp, kind), join(stage, kind), { recursive: true });
     }
-    await writeFile(join(stage, 'Game.rxproj'), 'RPGXP 1.04\r\n');
+    await writeFile(join(stage, 'Game.rxproj'), `RPGXP 1.0${library[6]}\r\n`);
     const ini = ['[Game]', `Library=${library}`, 'Scripts=Data\\Scripts.rxdata', `Title=${title}`, 'RTP1=', 'RTP2=', 'RTP3=', ''];
     await writeFile(join(stage, 'Game.ini'), ini.join('\r\n'), 'ascii');
     const details = await builder(stage);
@@ -194,18 +244,20 @@ export function runProcess(command, args, options = {}) {
 }
 
 export async function copyRuntime(source, destination) {
-  for (const file of ['Game.exe', 'RGSS104E.dll']) {
+  const ini = await readFile(join(source, 'Game.ini'), 'latin1');
+  const library = ini.match(/^Library[ \t]*=[ \t]*([^\r\n]+)/im)?.[1].trim();
+  assert(libraryPattern.test(library ?? ''), 'Game.ini must point to a local RGSS1 DLL');
+  for (const file of ['Game.exe', library]) {
     await copyFile(join(source, file), join(destination, file));
   }
-  const ini = await readFile(join(source, 'Game.ini'), 'latin1');
-  const standaloneIni = ini.replace(/^(RTP[123]\s*=)[ \t]*([^\r\n]*)/gim, (_, key, value) => {
+  const standaloneIni = ini.replace(/^(RTP[123][ \t]*=)[ \t]*([^\r\n]*)/gim, (_, key, value) => {
     assert(!value.trim() || value.trim().toLowerCase() === 'standard', `Custom RTP '${value.trim()}' must be imported as local game assets`);
     return key;
   });
   await writeFile(join(destination, 'Game.ini'), standaloneIni, 'latin1');
   const allowed = ['Data', 'Graphics', 'Audio', 'Fonts'];
   for (const kind of allowed) {
-    if (kind === 'Graphics' || kind === 'Audio') {
+    if ((kind === 'Graphics' || kind === 'Audio') && existsSync(join(rtp, kind))) {
       await cp(join(rtp, kind), join(destination, kind), { recursive: true });
     }
     const src = join(source, kind);
@@ -249,9 +301,9 @@ export async function packageProject(id, revision = 'release') {
 }
 
 export async function launchProject(id, editor = false) {
-  if (editor) verifyInstall();
   const dir = await getProject(id);
-  const child = runProcess(editor ? join(install, 'RPGXP.exe') : join(dir, 'Game.exe'),
+  const executable = editor ? findNonSteamEditor() : join(dir, 'Game.exe');
+  const child = runProcess(executable,
     editor ? [join(dir, 'Game.rxproj')] : [], { cwd: dir, detached: true, stdio: 'ignore', windowsHide: false });
   await new Promise((done, fail) => {
     child.once('spawn', done);
@@ -259,4 +311,18 @@ export async function launchProject(id, editor = false) {
   });
   child.unref();
   return { pid: child.pid, project: dir, editor };
+}
+
+function findNonSteamEditor() {
+  const explicit = process.env.RPGXP_EDITOR || settings.editor;
+  assert(!explicit || /[\\/]RPGXP\.exe$/i.test(explicit), '请将 editor 设置为非 Steam 版 RPGXP.exe 的完整路径。');
+  const candidates = explicit ? [resolve(explicit)] :
+    [join(install, 'RPGXP.exe'), discoverEditor()].filter(Boolean).map(path => path.endsWith('.exe') ? path : join(path, 'RPGXP.exe'));
+  for (const item of candidates) {
+    const folder = dirname(item);
+    const steam = /(?:^|[\\/])steamapps(?:[\\/]|$)/i.test(folder) ||
+      ['RPGXP_install.vdf', 'steam_appid.txt'].some(file => existsSync(join(folder, file)));
+    if (!steam && existsSync(item)) return item;
+  }
+  throw new Error('图形编辑器入口需要官方非 Steam 版 RPG Maker XP。可在 studio/settings.json 的 editor 中填写它的 RPGXP.exe 路径。工程生成、试玩和打包可直接使用离线运行库。');
 }

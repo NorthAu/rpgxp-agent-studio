@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path';
 import { readJson } from './compile.mjs';
 import {
   buildProject, checkProject, getProject, install, launchProject, listProjects,
-  packageProject, rtp, sample, withProjectLock, workspace,
+  packageProject, prepareOfflineRuntime, rtp, sample, withProjectLock, workspace,
 } from './project.mjs';
 import { playtest } from './playtest.mjs';
 
@@ -28,10 +28,10 @@ async function menu() {
   const input = createInterface({ input: process.stdin, output: process.stdout });
   const ask = async message => (await input.question(message)).trim().replace(/^"(.*)"$/, '$1');
   const gameId = () => ask('工程 ID（英文小写、数字或连字符）> ');
-  console.log(`RPG Maker XP 制作器\nXP 安装  ${install}\n工作目录 ${workspace}`);
+  console.log(`RPG Maker XP 制作器\nXP 运行库 ${install}\n工作目录 ${workspace}`);
   try {
     while (true) {
-      console.log('\n1 生成 JSON 游戏工程\n2 构建、通关并打包内置示例\n3 查看工程\n4 在 RPG Maker XP 打开工程\n5 启动游戏\n6 检查工程并打包\n7 测试工程能否进入新游戏\n0 退出');
+      console.log('\n1 生成 JSON 游戏工程\n2 构建、通关并打包内置示例\n3 查看工程\n4 在非 Steam 版 RPG Maker XP 打开工程\n5 启动游戏\n6 检查工程并打包\n7 测试工程能否进入新游戏\n8 准备本机离线运行库\n0 退出');
       const choice = await ask('选择> ');
       try {
         switch (choice) {
@@ -62,8 +62,15 @@ async function menu() {
           case '7':
             print(await owned(await gameId(), id => playtest(id)));
             break;
+          case '8': {
+            const from = await ask('XP 安装目录（留空自动查找）> ');
+            const assets = await ask('独立 RTP 目录（留空自动查找）> ');
+            print(await prepareOfflineRuntime(from || undefined, assets || undefined));
+            console.log('下次打开菜单将使用本机离线运行库。');
+            break;
+          }
           default:
-            console.log('请输入 0–7。');
+            console.log('请输入 0–8。');
         }
       } catch (error) {
         console.error(error.message);
@@ -76,6 +83,7 @@ async function menu() {
 
 try {
   if (process.argv[2] === 'demo') await demo(process.argv[3] ?? 'lighthouse');
+  else if (process.argv[2] === 'cache-runtime') print(await prepareOfflineRuntime(process.argv[3], process.argv[4]));
   else await menu();
 } catch (error) {
   console.error(error.message);

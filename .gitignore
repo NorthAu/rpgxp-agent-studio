@@ -1,6 +1,8 @@
 /projects/
 /dist/
 /reports/
+/.rpgxp-runtime/
+/.runtime-copy-*/
 /studio/settings.json
 /studio/runtime/
 node_modules/

@@ -6,4 +6,4 @@
 
 `lighthouse.json` 与 `lighthouse-playtest.json` 提供完整规格和测试示例。原版编辑器和 Agent 应轮流编辑同一个项目，避免覆盖对方的修改。
 
-`projects`、`dist`、`reports` 和 `studio/settings.json` 属于本机工作区。公开发行包包含制作器和依赖，构建时从本机 RPG Maker XP 读取项目模板、运行时与素材。
+`projects`、`dist`、`reports`、`.rpgxp-runtime` 和 `studio/settings.json` 属于本机工作区。首次用 `cache-runtime` 从本机已授权的 RPG Maker XP 安装准备运行库，之后用本地副本离线构建、验证和打包。启动图形编辑器时使用独立安装的官方非 Steam 版。

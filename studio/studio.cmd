@@ -5,10 +5,11 @@ set "NODE_PATH="
 set "studio_node=%~dp0runtime\node.exe"
 if not exist "%studio_node%" set "studio_node=node.exe"
 if "%~1"=="" goto menu
-if /i "%~1"=="demo" goto demo
+if /i "%~1"=="demo" goto utility
+if /i "%~1"=="cache-runtime" goto utility
 "%studio_node%" "%~dp0studio.mjs" %*
 exit /b %errorlevel%
-:demo
+:utility
 "%studio_node%" "%~dp0launcher.mjs" %*
 exit /b %errorlevel%
 :menu
